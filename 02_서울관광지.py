@@ -1,134 +1,237 @@
+import folium
 import pandas as pd
-import pydeck as pdk
 import streamlit as st
+from streamlit_folium import st_folium
 
-# 페이지 설정
+# 1. 페이지 기본 설정
 st.set_page_config(
-    page_title="서울 외국인 관광 명소 TOP 10",
+    page_title="서울 핫플 TOP 10 - 1박 2일 코스",
     page_icon="🗺️",
     layout="wide",
 )
 
-# 타이틀 및 설명
-st.title("🇰🇷 외국인 관광객이 가장 사랑하는 서울 핫플 TOP 10")
+st.title("🇰🇷 외국인 선호 서울 관광지 TOP 10 : 1박 2일 완벽 코스")
 st.markdown(
-    "스트림릿(Streamlit)과 Pydeck 지도를 활용해 외국인들이 꼭 찾는 서울의 대표 관광지 10곳을 지도에 표시했습니다."
+    "오전 9시부터 저녁 7시까지 알차게 둘러보는 **1박 2일 서울 여행 플랜**입니다. 지도 아래에서 시간대별 일정과 식당·호텔 정보를 확인하세요."
 )
 
-# 외국인 선호 서울 관광지 TOP 10 데이터 (내장 데이터)
+# 2. 관광지 데이터 정의 (일차 구분 및 좌표)
 data = {
     "장소": [
         "경복궁",
-        "명동 쇼핑거리",
-        "N서울타워 (남산)",
         "북촌한옥마을",
+        "광장시장",
         "동대문디자인플라자(DDP)",
+        "N서울타워 (남산)",
+        "국립중앙박물관",
+        "명동 쇼핑거리",
+        "반포 한강공원",
         "홍대 (홍익대 거리)",
         "잠실 롯데월드 & 타워",
-        "광장시장",
-        "국립중앙박물관",
-        "반포 한강공원",
+    ],
+    "일차": [
+        "1일차",
+        "1일차",
+        "1일차",
+        "1일차",
+        "1일차",
+        "2일차",
+        "2일차",
+        "2일차",
+        "2일차",
+        "2일차",
     ],
     "설명": [
         "조선시대의 대표 궁궐이자 한복 체험 명소",
-        "K-뷰티, 쇼핑, 길거리 음식을 즐기는 쇼핑 1번지",
-        "서울의 전경과 야경을 한눈에 담는 랜드마크",
         "한국 전통 가옥(한옥)의 아름다움을 느낄 수 있는 마을",
+        "빈대떡, 마약김밥 등 전통 시장의 맛을 느끼는 곳",
         "세계적인 건축가 자하 하디드가 설계한 복합문화공간",
+        "서울의 전경과 야경을 한눈에 담는 랜드마크",
+        "한국의 역사와 유물을 한눈에 볼 수 있는 최고 박물관",
+        "K-뷰티, 쇼핑, 길거리 음식을 즐기는 쇼핑 1번지",
+        "한강 라면과 야경, 치맥을 즐길 수 있는 시민들의 휴식처",
         "젊음의 거리, 버스킹과 트렌디한 클럽/카페 문화",
         "초고층 전망대(서울스카이)와 대형 테마파크",
-        "빈대떡, 마약김밥 등 전통 시장의 맛을 느끼는 곳",
-        "한국의 역사와 유물을 한눈에 볼 수 있는 최고 박물관",
-        "한강 라면과 야경, 치맥을 즐길 수 있는 시민들의 휴식처",
     ],
     "lat": [
         37.5796,
-        37.5636,
-        37.5512,
         37.5826,
+        37.5700,
         37.5665,
+        37.5512,
+        37.5239,
+        37.5636,
+        37.5110,
         37.5563,
         37.5133,
-        37.5700,
-        37.5239,
-        37.5110,
     ],
     "lon": [
         126.9770,
-        126.9822,
-        126.9882,
         126.9838,
+        126.9994,
         126.9909,
+        126.9882,
+        126.9797,
+        126.9822,
+        126.9918,
         126.9227,
         127.1001,
-        126.9994,
-        126.9797,
-        126.9918,
     ],
 }
 
 df = pd.DataFrame(data)
 
-# 사이드바 설정 (관광지 목록 확인용)
-st.sidebar.header("📍 관광지 목록 보기")
-selected_spot = st.sidebar.selectbox("원하는 장소를 선택하세요:", df["장소"])
+# 사이드바 필터링
+st.sidebar.header("📍 필터 및 장소 선택")
+day_filter = st.sidebar.radio("일차 선택:", ["전체", "1일차", "2일차"])
+selected_spot = st.sidebar.selectbox("상세 정보 볼 장소:", df["장소"])
 
-# 선택된 장소의 정보 필터링
-spot_info = df[df["장소"] == selected_spot].iloc[0]
+if day_filter != "전체":
+    filtered_df = df[df["일차"] == day_filter]
+else:
+    filtered_df = df
 
-# 레이아웃 구성 (좌측: 지도, 우측: 상세 정보)
-col1, col2 = st.columns([2, 1])
+# 3. 레이아웃: 메인 지도 영역
+st.subheader("🗺️ 서울 관광지 위치 지도")
 
-with col1:
-    st.subheader("🗺️ 서울 관광지도 (Pydeck)")
+m = folium.Map(location=[37.555, 126.975], zoom_start=11)
 
-    # Pydeck을 이용한 3D 인터랙티브 지도 구현
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=df,
-        get_position=["lon", "lat"],
-        get_color=[255, 75, 75, 200],  # 포인트 색상 (빨간색 계열)
-        get_radius=300,  # 원 크기
-        pickable=True,
-        auto_highlight=True,
+for idx, row in filtered_df.iterrows():
+    # 1일차는 빨간색, 2일차는 파란색 마커
+    color = "red" if row["일차"] == "1일차" else "blue"
+    if row["장소"] == selected_spot:
+        color = "green"  # 선택된 장소 초록색 강조
+
+    popup_html = (
+        f"<b>[{row['일차']}] {row['장소']}</b><br>{row['설명']}"
     )
 
-    # 서울 중심부 초기 좌표 설정
-    view_state = pdk.ViewState(
-        latitude=37.555, longitude=126.975, zoom=11, pitch=30
-    )
+    folium.Marker(
+        location=[row["lat"], row["lon"]],
+        popup=folium.Popup(popup_html, max_width=300),
+        tooltip=f"[{row['일차']}] {row['장소']}",
+        icon=folium.Icon(color=color, icon="info-sign"),
+    ).add_to(m)
 
-    # 툴팁 설정
-    tooltip = {
-        "html": "<b>장소:</b> {장소}<br/><b>설명:</b> {설명}",
-        "style": {
-            "background": "grey",
-            "color": "white",
-            "font-family": "sans-serif",
-            "z-index": "10000",
+st_folium(m, width="100%", height=450)
+
+st.markdown("---")
+
+# 4. 지도 밑 1박 2일 일정 표 & 식당/호텔 추천
+st.subheader("📅 1박 2일 상세 일정표 (09:00 ~ 19:00)")
+
+tab1, tab2, tab3 = st.tabs(
+    ["🗓️ 1일차 일정 (강북·도심)", "🗓️ 2일차 일정 (용산·강남·홍대·잠실)", "🏨 추천 호텔"]
+)
+
+with tab1:
+    st.markdown("### 📍 Day 1: 전통과 현대의 조화 코스")
+
+    schedule_day1 = [
+        {
+            "시간": "09:00 - 11:00",
+            "일정": "경복궁",
+            "내용": "한복 착용 후 수문장 교대식 관람 및 궁궐 산책",
+            "식당 추천": "아침/점심: [토속촌 삼계탕](https://map.naver.com/v5/search/토속촌삼계탕)",
         },
-    }
+        {
+            "시간": "11:30 - 13:00",
+            "일정": "북촌한옥마을",
+            "내용": "전통 한옥 골목길 탐방 및 카페거리 휴식",
+            "식당 추천": "점심: [황생가칼국수](https://map.naver.com/v5/search/황생가칼국수)",
+        },
+        {
+            "시간": "13:30 - 15:00",
+            "일정": "광장시장",
+            "내용": "마약김밥, 녹두빈대떡, 육회 등 전통 먹거리 체험",
+            "식당 추천": "간식/주식: [부촌육회 광장시장점](https://map.naver.com/v5/search/부촌육회)",
+        },
+        {
+            "시간": "15:30 - 17:00",
+            "일정": "동대문디자인플라자(DDP)",
+            "내용": "자하 하디드 건축물 투어 및 디자인 전시 관람",
+            "식당 추천": "-",
+        },
+        {
+            "시간": "17:30 - 19:00",
+            "일정": "N서울타워 (남산)",
+            "내용": "케이블카 탑승 및 서울 도심 일몰/야경 감상",
+            "식당 추천": "저녁: [남산돈까스](https://map.naver.com/v5/search/101번지남산돈까스)",
+        },
+    ]
 
-    r = pdk.Deck(
-        layers=[layer],
-        initial_view_state=view_state,
-        tooltip=tooltip,
-    )
+    st.table(pd.DataFrame(schedule_day1))
 
-    st.pydeck_chart(r)
+with tab2:
+    st.markdown("### 📍 Day 2: 문화·쇼핑·야경 코스")
 
-with col2:
-    st.subheader("💡 선택된 핫플 정보")
-    st.markdown(f"### **{spot_info['장소']}**")
-    st.info(spot_info["설명"])
-    st.write(f"📌 **위도:** {spot_info['lat']}")
-    st.write(f"📌 **경도:** {spot_info['lon']}")
+    schedule_day2 = [
+        {
+            "시간": "09:00 - 11:00",
+            "일정": "국립중앙박물관",
+            "내용": "사유의 방(반가사유상) 관람 및 용산가족공원 산책",
+            "식당 추천": "아침/점심: [이촌동 동빙고](https://map.naver.com/v5/search/동빙고)",
+        },
+        {
+            "시간": "11:30 - 13:30",
+            "일정": "명동 쇼핑거리",
+            "내용": "K-뷰티 쇼핑, 로드샵 및 명동성당 둘러보기",
+            "식당 추천": "점심: [명동교자 본점](https://map.naver.com/v5/search/명동교자)",
+        },
+        {
+            "시간": "14:00 - 15:30",
+            "일정": "홍대 (홍익대 거리)",
+            "내용": "버스킹 관람, 캐릭터 숍 및 트렌디한 카페 방문",
+            "식당 추천": "디저트: [홍대 연남동 카페거리](https://map.naver.com/v5/search/연남동카페거리)",
+        },
+        {
+            "시간": "16:00 - 17:30",
+            "일정": "잠실 롯데월드 & 타워",
+            "내용": "서울스카이 전망대에서 한강 및 서울 전경 관람",
+            "식당 추천": "-",
+        },
+        {
+            "시간": "18:00 - 19:00",
+            "일정": "반포 한강공원",
+            "내용": "무지개분수 감상, 한강 피크닉 및 라면/치맥",
+            "식당 추천": "저녁: [한강 세빛섬 레스토랑](https://map.naver.com/v5/search/세빛섬)",
+        },
+    ]
 
-    st.markdown("---")
-    st.markdown("### 📋 전체 TOP 10 리스트")
-    for idx, row in df.iterrows():
-        st.write(f"**{idx+1}. {row['장소']}**")
+    st.table(pd.DataFrame(schedule_day2))
 
-# 하단 데이터 테이블 표시
-with st.expander("📊 전체 데이터 테이블 보기"):
-    st.dataframe(df[["장소", "설명", "lat", "lon"]])
+with tab3:
+    st.markdown("### 🏨 이동이 편리한 위치별 추천 호텔")
+
+    hotels = [
+        {
+            "구분": "럭셔리 / 뷰 맛집",
+            "호텔명": "서울신라호텔",
+            "위치": "중구 (동대문·남산 인근)",
+            "특징": "최고급 서비스 및 남산타워 뷰",
+            "링크": "[네이버 지도 보기](https://map.naver.com/v5/search/서울신라호텔)",
+        },
+        {
+            "구분": "접근성 최강 (가성비/중급)",
+            "호텔명": "L7 명동 바이 롯데",
+            "위치": "명동역 바로 앞",
+            "특징": "명동 쇼핑 및 N서울타워 이동 용이",
+            "링크": "[네이버 지도 보기](https://map.naver.com/v5/search/L7명동)",
+        },
+        {
+            "구분": "부티크 / 트렌디",
+            "호텔명": "RYSE (라이즈 오토그래프 컬렉션)",
+            "위치": "홍대입구역 인근",
+            "특징": "젊은 감각의 인테리어 및 홍대 접근성",
+            "링크": "[네이버 지도 보기](https://map.naver.com/v5/search/라이즈호텔)",
+        },
+        {
+            "구분": "랜드마크 프리미엄",
+            "호텔명": "시그니엘 서울",
+            "위치": "잠실 롯데월드타워",
+            "특징": "100층 이상에서 바라보는 서울 전경",
+            "링크": "[네이버 지도 보기](https://map.naver.com/v5/search/시그니엘서울)",
+        },
+    ]
+
+    st.table(pd.DataFrame(hotels))
